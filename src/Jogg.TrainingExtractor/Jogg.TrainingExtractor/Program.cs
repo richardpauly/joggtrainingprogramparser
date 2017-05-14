@@ -40,7 +40,7 @@ namespace Jogg.TrainingExtractor
                         Summary = subject,
                         Description = details,
                         Class = "PUBLIC",
-                        
+                        IsAllDay = true
                     });
                 }
             }
