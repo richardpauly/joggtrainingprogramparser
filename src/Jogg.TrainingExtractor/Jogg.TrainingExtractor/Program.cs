@@ -65,7 +65,7 @@ namespace Jogg.TrainingExtractor
 
         private static string ParseDetails(IReadOnlyList<HtmlNode> cells)
         {
-            var listItems = cells[1].Descendants("li").Select(li => li.InnerText.Trim());
+            var listItems = cells[1].Descendants("li").Select(li => li.InnerText.Trim()).Where(item => !item.StartsWith("Tips"));
             return string.Join("\r\r", listItems);
         }
 
