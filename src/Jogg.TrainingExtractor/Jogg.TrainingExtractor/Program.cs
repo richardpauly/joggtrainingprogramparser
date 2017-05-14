@@ -22,7 +22,7 @@ namespace Jogg.TrainingExtractor
             var doc = web.Load(url);
             var header = doc.DocumentNode.SelectNodes("//*[@id=\"content\"]/div[3]/div/div/h2")[0].InnerText.Replace(':','.');
             var rows = doc.DocumentNode.SelectNodes("//*[@id=\"content\"]/div[3]/div/div/table")[0].Descendants("tr");
-            var calendar = new Calendar { Name = header };
+            var calendar = new Calendar();
             foreach (var row in rows.Where(row => row.Id.Contains("weekRepeater")))
             {
                 var cells = row.Descendants("td").ToList();
@@ -37,14 +37,16 @@ namespace Jogg.TrainingExtractor
                         DtStart = new CalDateTime(date.Year, date.Month, date.Day),
                         DtEnd = new CalDateTime(date.Year, date.Month, date.Day),
                         Summary = subject,
-                        Description = details
+                        Description = details,
+                        Class = "PUBLIC",
+                        
                     });
                 }
             }
             var serializer = new CalendarSerializer(new SerializationContext());
             var serializedCalendar = serializer.SerializeToString(calendar);
             var directory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop) + "\\";
-            var filename = calendar.Name + ".ics";
+            var filename = header + ".ics";
             var path = Path.Combine(directory,filename);
             using (var streamWriter = new StreamWriter(path))
             {
