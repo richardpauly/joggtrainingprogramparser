@@ -23,6 +23,7 @@ namespace Jogg.TrainingExtractor
             var header = doc.DocumentNode.SelectNodes("//*[@id=\"content\"]/div[3]/div/div/h2")[0].InnerText.Replace(':','.');
             var rows = doc.DocumentNode.SelectNodes("//*[@id=\"content\"]/div[3]/div/div/table")[0].Descendants("tr");
             var calendar = new Calendar();
+            calendar.AddTimeZone(new VTimeZone("Europe/Copenhagen"));
             foreach (var row in rows.Where(row => row.Id.Contains("weekRepeater")))
             {
                 var cells = row.Descendants("td").ToList();
