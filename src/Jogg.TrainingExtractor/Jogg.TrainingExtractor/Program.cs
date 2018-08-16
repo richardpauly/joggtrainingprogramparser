@@ -14,19 +14,28 @@ namespace Jogg.TrainingExtractor
     {
         static void Main(string[] args)
         {
-            const string url = "http://jogg.se/Program/Program.aspx?id=14&raceid=649167";
+            if (args.Length < 1)
+            {
+                Console.WriteLine("Du måste ange en url där ett träningsprogram kan hämtas");
+                Console.ReadKey();
+                return;
+            }
+            var url = args[0];
+            Console.WriteLine("Försöker läsa träningsprogram från {0}", url);
             var web = new HtmlWeb();
             var doc = web.Load(url);
-            var header = doc.DocumentNode.SelectNodes("//*[@id=\"content\"]/div[3]/div/div/h2")[0].InnerText.Replace(':','.');
-            var rows = doc.DocumentNode.SelectNodes("//*[@id=\"content\"]/div[3]/div/div/table")[0].Descendants("tr");
+            var header = doc.DocumentNode.SelectNodes("//*[@id=\"content\"]/div[2]/div/div/h2")[0].InnerText.Replace(':', '.');
+            var rows = doc.DocumentNode.SelectNodes("//*[@id=\"content\"]/div[2]/div/div/table")[0].Descendants("tr");
             var calendar = new Calendar();
+            Console.WriteLine("Exporterar kalender från träningsprogrammet...");
             calendar.AddTimeZone(new VTimeZone("Europe/Copenhagen"));
             foreach (var row in rows.Where(row => row.Id.Contains("weekRepeater")))
             {
                 var cells = row.Descendants("td").ToList();
                 var date = ParseDateForRow(cells);
                 var subject = ParseSubject(cells);
-                var details = ParseDetails(cells);
+                var link = url + "#" + row.Id;
+                var details = ParseDetails(cells, link);
                 if (!subject.StartsWith("Vila"))
                 {
                     calendar.Events.Add(new Event()
@@ -45,12 +54,13 @@ namespace Jogg.TrainingExtractor
             var serializedCalendar = serializer.SerializeToString(calendar);
             var directory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop) + "\\";
             var filename = header + ".ics";
-            var path = Path.Combine(directory,filename);
+            var path = Path.Combine(directory, filename);
             using (var streamWriter = new StreamWriter(path))
             {
                 streamWriter.Write(serializedCalendar);
                 streamWriter.Close();
             }
+            Console.WriteLine("Klart! Träningsprogrammet sparades till {0}", path);
         }
 
         private static string ParseSubject(IReadOnlyList<HtmlNode> cells)
@@ -63,10 +73,10 @@ namespace Jogg.TrainingExtractor
             return cell.InnerText.Trim().Split(' ')[0];
         }
 
-        private static string ParseDetails(IReadOnlyList<HtmlNode> cells)
+        private static string ParseDetails(IReadOnlyList<HtmlNode> cells, string link)
         {
             var listItems = cells[1].Descendants("li").Select(li => li.InnerText.Trim()).Where(item => !item.StartsWith("Tips"));
-            return string.Join("\r\r", listItems);
+            return string.Join("\r\r", listItems) + $"\r\n<a href='{link}'>Läs mer här</a>";
         }
 
         private static DateTime ParseDateForRow(IReadOnlyList<HtmlNode> cells)
