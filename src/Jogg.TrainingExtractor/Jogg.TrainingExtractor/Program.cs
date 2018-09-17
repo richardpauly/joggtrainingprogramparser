@@ -25,6 +25,9 @@ namespace Jogg.TrainingExtractor
             var web = new HtmlWeb();
             var doc = web.Load(url);
             var header = doc.DocumentNode.SelectNodes("//*[@id=\"content\"]/div[2]/div/div/h2")[0].InnerText.Replace(':', '.');
+            var raceDate = ParseDateWithYear(doc.DocumentNode.SelectSingleNode("//*[@id=\"MainContent_m_adaptionDiv\"]/text()[2]").InnerText.Replace("-", "").Replace("&nbsp;", "").Trim());
+            var minimumDate = raceDate.AddMonths(-6); // Expecting no programs to start more than 6 months before competition
+            var competition = ParseCompetitionName(doc, header);
             var rows = doc.DocumentNode.SelectNodes("//*[@id=\"content\"]/div[2]/div/div/table")[0].Descendants("tr");
             var calendar = new Calendar();
             Console.WriteLine("Exporterar kalender från träningsprogrammet...");
@@ -32,10 +35,10 @@ namespace Jogg.TrainingExtractor
             foreach (var row in rows.Where(row => row.Id.Contains("weekRepeater")))
             {
                 var cells = row.Descendants("td").ToList();
-                var date = ParseDateForRow(cells);
+                var date = ParseDateForRow(cells, minimumDate);
                 var subject = ParseSubject(cells);
                 var link = url + "#" + row.Id;
-                var details = ParseDetails(cells, link);
+                var details = ParseDetails(cells, link) + $"\n\nMål: {competition}";
                 if (!subject.StartsWith("Vila"))
                 {
                     calendar.Events.Add(new Event()
@@ -53,7 +56,7 @@ namespace Jogg.TrainingExtractor
             var serializer = new CalendarSerializer(new SerializationContext());
             var serializedCalendar = serializer.SerializeToString(calendar);
             var directory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop) + "\\";
-            var filename = header + ".ics";
+            var filename = $"{competition} - {header}.ics";
             var path = Path.Combine(directory, filename);
             using (var streamWriter = new StreamWriter(path))
             {
@@ -61,6 +64,26 @@ namespace Jogg.TrainingExtractor
                 streamWriter.Close();
             }
             Console.WriteLine("Klart! Träningsprogrammet sparades till {0}", path);
+        }
+
+        private static string ParseCompetitionName(HtmlDocument doc, string fallback)
+        {
+            string competition;
+            try
+            {
+                // If the competition is named
+                competition = doc.DocumentNode.SelectNodes("//*[@id=\"MainContent_m_competitionlink\"]/b")[0].InnerText;
+
+            }
+            catch (Exception)
+            {
+                // If the competition is not named, but rather a date
+                competition = doc.DocumentNode.SelectNodes("//*[@id=\"MainContent_m_adaptionDiv\"]/text()[2]")[0].InnerText.Replace("&nbsp;", "").Trim().FirstCharToUpper();
+                if (!competition.StartsWith("Tävling"))
+                    competition = fallback;
+            }
+
+            return competition;
         }
 
         private static string ParseSubject(IReadOnlyList<HtmlNode> cells)
@@ -76,15 +99,38 @@ namespace Jogg.TrainingExtractor
         private static string ParseDetails(IReadOnlyList<HtmlNode> cells, string link)
         {
             var listItems = cells[1].Descendants("li").Select(li => li.InnerText.Trim()).Where(item => !item.StartsWith("Tips"));
-            return string.Join("\r\r", listItems) + $"\r\n<a href='{link}'>Läs mer här</a>";
+            return string.Join("\r\r", listItems) + $"\r\nDetaljer: {link}";
         }
 
-        private static DateTime ParseDateForRow(IReadOnlyList<HtmlNode> cells)
+        private static DateTime ParseDateForRow(IReadOnlyList<HtmlNode> cells, DateTime minimumDate)
         {
-            var dateParts = cells[0].Descendants("span").First().InnerText.Trim().Split(' ');
+            var dateParts = cells[0].Descendants("span").First().InnerText.Trim().Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
             var day = int.Parse(dateParts[0]);
             var month = ParseMonth(dateParts[1]);
-            return new DateTime(DateTime.Now.Year, month, day);
+            var date = new DateTime(DateTime.Now.Year, month, day);
+
+            while (date < minimumDate)
+                date = date.AddYears(1);
+            return date;
+        }
+        private static DateTime ParseDateWithYear(string input)
+        {
+            if (input.StartsWith("tävling"))
+            {
+                input = input.Replace("tävling", "").Trim();
+                var day = int.Parse(input.Substring(6, 2));
+                var month = int.Parse(input.Substring(4, 2));
+                var year = int.Parse(input.Substring(0, 4));
+                return new DateTime(year, month, day);
+            }
+            else
+            {
+                var dateParts = input.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+                var day = int.Parse(dateParts[0]);
+                var month = ParseMonth(dateParts[1]);
+                var year = int.Parse(dateParts[2]);
+                return new DateTime(year, month, day);
+            }
         }
 
         private static int ParseMonth(string month)
