@@ -4,9 +4,9 @@ using System.IO;
 using System.Linq;
 using HtmlAgilityPack;
 using Ical.Net;
+using Ical.Net.CalendarComponents;
 using Ical.Net.DataTypes;
 using Ical.Net.Serialization;
-using Ical.Net.Serialization.iCalendar.Serializers;
 
 namespace Jogg.TrainingExtractor
 {
@@ -41,7 +41,7 @@ namespace Jogg.TrainingExtractor
                 var details = ParseDetails(cells, link) + $"\n\nMål: {competition}";
                 if (!subject.StartsWith("Vila"))
                 {
-                    calendar.Events.Add(new Event()
+                    calendar.Events.Add(new CalendarEvent()
                     {
 
                         DtStart = new CalDateTime(date.Year, date.Month, date.Day),
