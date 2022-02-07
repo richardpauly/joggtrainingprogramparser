@@ -25,31 +25,36 @@ namespace Jogg.TrainingExtractor
             var web = new HtmlWeb();
             var doc = web.Load(url);
             var header = doc.DocumentNode.SelectNodes("//*[@id=\"content\"]/div[2]/div/div/h2")[0].InnerText.Replace(':', '.');
-            var raceDate = ParseDateWithYear(doc.DocumentNode.SelectSingleNode("//*[@id=\"MainContent_m_adaptionDiv\"]/text()[2]").InnerText.Replace("-", "").Replace("&nbsp;", "").Trim());
+            var raceDate = ParseDateWithYear(doc.DocumentNode.SelectSingleNode("//*[@id=\"MainContent_m_adaptionDiv\"]/b/text()[2]").InnerText.Replace("-", "").Replace("&nbsp;", "").Trim());
             var minimumDate = raceDate.AddMonths(-6); // Expecting no programs to start more than 6 months before competition
             var competition = ParseCompetitionName(doc, header);
             var rows = doc.DocumentNode.SelectNodes("//*[@id=\"content\"]/div[2]/div/div/table")[0].Descendants("tr");
             var calendar = new Calendar();
             Console.WriteLine("Exporterar kalender från träningsprogrammet...");
             calendar.AddTimeZone(new VTimeZone("Europe/Copenhagen"));
-            foreach (var row in rows.Where(row => row.Id.Contains("weekRepeater")))
+            foreach (var row in rows.Where(row => row.Id.Contains("weekRepeater") && !row.InnerHtml.Contains("MidPanorama")))
             {
                 var cells = row.Descendants("td").ToList();
-                var date = ParseDateForRow(cells, minimumDate);
                 var subject = ParseSubject(cells);
-                var link = url + "#" + row.Id;
-                var details = ParseDetails(cells, link) + $"\n\nMål: {competition}";
                 if (!subject.StartsWith("Vila"))
                 {
+                    var date = ParseDateForRow(cells, minimumDate);
+                    var duration = ParseDuration(cells);
+                    var start = new DateTime(date.Year, date.Month, date.Day, 12, 0, 0);
+                    var end = start.Add(duration);
+                    var link = url + "#" + row.Id;
+                    var details = ParseDetails(cells, link) + $"\n\nMål: {competition}";
+
                     calendar.Events.Add(new CalendarEvent()
                     {
 
-                        DtStart = new CalDateTime(date.Year, date.Month, date.Day),
-                        DtEnd = new CalDateTime(date.Year, date.Month, date.Day),
+                        DtStart = new CalDateTime(start),
+                        DtEnd = new CalDateTime(end),
                         Summary = subject,
                         Description = details,
                         Class = "PUBLIC",
-                        IsAllDay = true
+                        IsAllDay = false,
+                        Categories = new List<string>() { "Träning" }
                     });
                 }
             }
@@ -89,6 +94,26 @@ namespace Jogg.TrainingExtractor
         private static string ParseSubject(IReadOnlyList<HtmlNode> cells)
         {
             return GetFirstWord(cells[1]) + " " + cells[2].InnerText.Trim();
+        }
+
+        /// <summary>
+        /// Get the length in kilometers for the given row
+        /// </summary>
+        private static int ParseLength(IReadOnlyList<HtmlNode> cells, int defaultValue = 10)
+        {
+            var parts = cells[2].InnerText?.Replace("km", String.Empty).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Select(part =>
+            {
+                if (int.TryParse(part, out int value))
+                    return value;
+                return default;
+            }).Where(part => part != default);
+            return (parts != null && parts.Any()) ? parts.Max() : defaultValue;
+        }
+
+        private static TimeSpan ParseDuration(IReadOnlyList<HtmlNode> cells)
+        {
+            var length = ParseLength(cells);
+            return TimeSpan.FromHours(length / 10d * 1.15); // one hour per 10k, and add some extra percentage
         }
 
         private static string GetFirstWord(HtmlNode cell)
